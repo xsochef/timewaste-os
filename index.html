@@ -219,6 +219,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [data, setData] = useState(carica);
   const [view, setView] = useState("dashboard");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [sync, setSync] = useState(SUPA_ON ? "connecting" : "local");
   const remoto = React.useRef(false);     // true quando applichiamo un update ricevuto (per non rimandarlo)
   const caricato = React.useRef(false);   // true dopo il primo caricamento da Supabase (prima non scriviamo)
@@ -285,19 +286,64 @@ function App() {
   const esporta = ()=>{ const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="timewaste-backup-"+oggi()+".json"; a.click(); };
   const importa = (e)=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const d=JSON.parse(r.result); if(d&&d.clienti&&d.appuntamenti&&d.incassi){ if(confirm("Importare questo backup? Sostituirà tutti i dati attuali.")) setData(d); } else alert("File non valido: non sembra un backup di TIMEWASTE OS."); }catch(err){ alert("File non leggibile."); } }; r.readAsText(f); e.target.value=""; };
 
+  const syncColor = sync==="synced"?"#34d399":sync==="saving"||sync==="connecting"?"#fbbf24":sync==="error"?"#f87171":"#64748b";
+  const syncLabel = sync==="synced"?"sincronizzato":sync==="saving"?"salvataggio…":sync==="connecting"?"connessione…":sync==="error"?"offline":"solo questo dispositivo";
+  const titoloVista = (NAV.find(n=>n.id===view)||{}).label || "TIMEWASTE OS";
+  const resetDati = ()=>{ if(confirm("Ricaricare i dati iniziali importati da Notion/Conti? Le modifiche fatte qui andranno perse.")){ localStorage.removeItem(KEY); setData((typeof window!=="undefined"&&window.SEED_IMPULSO)?JSON.parse(JSON.stringify(window.SEED_IMPULSO)):{clienti:[],appuntamenti:[],incassi:[]}); } };
+
   return (
-    <div className="min-h-screen flex flex-col md:flex-row">
-      {/* SIDEBAR */}
-      <aside className="md:w-64 bg-[#0b0b12] border-r border-[#16161f] md:min-h-screen p-4 flex md:flex-col gap-1">
-        <div className="hidden md:block mb-6 px-2">
+    <div className="min-h-screen md:flex">
+      {/* TOP BAR (mobile) */}
+      <header className="md:hidden sticky top-0 z-30 bg-[#0b0b12] border-b border-[#16161f] flex items-center justify-between px-4 pb-3" style={{paddingTop:"max(0.75rem, env(safe-area-inset-top))"}}>
+        <div className="flex items-center gap-2 min-w-0">
+          <img src="logo-tws.svg" alt="" className="w-7 h-7 rounded-md" onError={(e)=>{e.target.style.display='none';}} />
+          <div className="font-bold truncate">{titoloVista}</div>
+        </div>
+        <button onClick={()=>setMenuOpen(true)} aria-label="Menu" className="w-10 h-10 grid place-items-center rounded-lg text-2xl leading-none hover:bg-[#15151f]">☰</button>
+      </header>
+
+      {/* DRAWER (mobile) */}
+      {menuOpen && (
+        <div className="md:hidden fixed inset-0 z-40 bg-black/60" onClick={()=>setMenuOpen(false)}>
+          <div className="absolute right-0 top-0 h-full w-72 max-w-[82%] bg-[#0b0b12] border-l border-[#16161f] p-4 overflow-y-auto fade-in" style={{paddingTop:"max(1rem, env(safe-area-inset-top))"}} onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-9 h-9 rounded-full grid place-items-center font-bold text-black" style={{background:UTENTI[user].color}}>{UTENTI[user].nome[0]}</div>
+              <div className="flex-1 min-w-0"><div className="font-semibold truncate">{UTENTI[user].nome}</div><div className="text-[11px] text-slate-500 truncate">{UTENTI[user].ruolo}</div></div>
+              <button onClick={()=>setMenuOpen(false)} aria-label="Chiudi" className="w-9 h-9 grid place-items-center text-2xl text-slate-400">×</button>
+            </div>
+            <nav className="space-y-1">
+              {NAV.map(n=>(
+                <button key={n.id} onClick={()=>{setView(n.id); setMenuOpen(false);}}
+                  className={"w-full flex items-center gap-3 px-3 py-3 rounded-xl text-base font-medium "+(view===n.id?"bg-violet-500/15 text-violet-300":"text-slate-300 hover:bg-[#15151f]")}>
+                  <span className="opacity-70 w-5 text-center">{n.icon}</span>{n.label}
+                </button>
+              ))}
+            </nav>
+            <div className="mt-4 pt-4 border-t border-[#16161f]">
+              <div className="text-[11px] flex items-center gap-1 mb-3"><span style={{color:syncColor}}>●</span><span className="text-slate-500">{syncLabel}</span></div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {user==="giuseppe" && <>
+                  <input id="importFileM" type="file" accept="application/json" style={{display:"none"}} onChange={importa} />
+                  <button onClick={esporta} className="text-xs px-3 py-1.5 rounded-lg border border-[#26263a] text-slate-300">⬇ Esporta</button>
+                  <button onClick={()=>document.getElementById("importFileM").click()} className="text-xs px-3 py-1.5 rounded-lg border border-[#26263a] text-slate-300">⬆ Importa</button>
+                </>}
+                <button onClick={()=>setUser(null)} className="ml-auto text-sm px-3 py-1.5 rounded-lg border border-[#26263a] text-slate-300">Esci ⎋</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SIDEBAR (desktop) */}
+      <aside className="hidden md:flex md:w-64 md:flex-col bg-[#0b0b12] border-r border-[#16161f] md:min-h-screen p-4 gap-1">
+        <div className="mb-6 px-2">
           <div className="text-xl font-black tracking-tight">TIMEWASTE <span className="text-violet-400">OS</span></div>
           <div className="text-[11px] text-slate-500">Time Waste Studio</div>
           <div className="text-[10px] mt-1 flex items-center gap-1" title="Stato sincronizzazione">
-            <span style={{color: sync==="synced"?"#34d399":sync==="saving"||sync==="connecting"?"#fbbf24":sync==="error"?"#f87171":"#64748b"}}>●</span>
-            <span className="text-slate-500">{sync==="synced"?"sincronizzato":sync==="saving"?"salvataggio…":sync==="connecting"?"connessione…":sync==="error"?"offline":"solo questo dispositivo"}</span>
+            <span style={{color:syncColor}}>●</span><span className="text-slate-500">{syncLabel}</span>
           </div>
         </div>
-        <nav className="flex md:flex-col gap-1 flex-1 overflow-x-auto">
+        <nav className="flex flex-col gap-1 flex-1">
           {NAV.map(n=>(
             <button key={n.id} onClick={()=>setView(n.id)}
               className={"flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition "+(view===n.id?"bg-violet-500/15 text-violet-300":"text-slate-400 hover:bg-[#15151f]")}>
@@ -305,7 +351,7 @@ function App() {
             </button>
           ))}
         </nav>
-        <div className="hidden md:flex items-center gap-2 mt-4 pt-4 border-t border-[#16161f]">
+        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-[#16161f]">
           <div className="w-8 h-8 rounded-full grid place-items-center font-bold text-black text-sm" style={{background:UTENTI[user].color}}>{UTENTI[user].nome[0]}</div>
           <div className="flex-1 min-w-0"><div className="text-sm font-semibold truncate">{UTENTI[user].nome}</div><div className="text-[11px] text-slate-500 truncate">{UTENTI[user].ruolo}</div></div>
           {user==="giuseppe" && <>
@@ -313,13 +359,13 @@ function App() {
             <button onClick={esporta} title="Esporta backup (.json)" className="text-slate-500 hover:text-white text-sm mr-1">⬇</button>
             <button onClick={()=>document.getElementById("importFile").click()} title="Importa backup" className="text-slate-500 hover:text-white text-sm mr-1">⬆</button>
           </>}
-          <button onClick={()=>{ if(confirm("Ricaricare i dati iniziali importati da Notion/Conti? Le modifiche fatte qui andranno perse.")){ localStorage.removeItem(KEY); setData((typeof window!=="undefined"&&window.SEED_IMPULSO)?JSON.parse(JSON.stringify(window.SEED_IMPULSO)):{clienti:[],appuntamenti:[],incassi:[]}); } }} title="Ricarica dati importati" className="text-slate-500 hover:text-white text-sm mr-1">⟳</button>
+          <button onClick={resetDati} title="Ricarica dati importati" className="text-slate-500 hover:text-white text-sm mr-1">⟳</button>
           <button onClick={()=>setUser(null)} title="Esci" className="text-slate-500 hover:text-white text-sm">⎋</button>
         </div>
       </aside>
 
       {/* MAIN */}
-      <main className="flex-1 p-5 md:p-8 max-w-6xl">
+      <main className="flex-1 p-4 md:p-8 max-w-6xl w-full min-w-0">
         {view==="dashboard" && <Dashboard {...props} setView={setView} />}
         {view==="cerca" && <Cerca {...props} setView={setView} />}
         {view==="clienti" && <Clienti {...props} />}
