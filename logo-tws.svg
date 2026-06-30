@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img" aria-label="Time Waste Studio">
+  <defs>
+    <clipPath id="tw-star">
+      <path d="M178,31 L183.9,46.9 L200.8,47.6 L187.5,58.1 L192.1,74.4 L178,65 L163.9,74.4 L168.5,58.1 L155.2,47.6 L172.1,46.9 Z"/>
+    </clipPath>
+  </defs>
+  <!-- background -->
+  <rect x="0" y="0" width="240" height="240" rx="44" fill="#0d0d12"/>
+  <!-- T -->
+  <rect x="45" y="68" width="78" height="20" fill="#ffffff"/>
+  <rect x="73" y="68" width="22" height="110" fill="#ffffff"/>
+  <!-- W -->
+  <path d="M96,96 L116,176 L138,124 L160,176 L180,96" fill="none" stroke="#ffffff" stroke-width="22" stroke-linejoin="round" stroke-linecap="butt"/>
+  <!-- diagonal cut (lightning) -->
+  <line x1="60" y1="184" x2="98" y2="112" stroke="#0d0d12" stroke-width="9"/>
+  <!-- two-tone star -->
+  <g clip-path="url(#tw-star)">
+    <rect x="150" y="26" width="28" height="52" fill="#1f6fb5"/>
+    <rect x="178" y="26" width="28" height="52" fill="#f5b301"/>
+  </g>
+</svg>
