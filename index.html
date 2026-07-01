@@ -1154,7 +1154,13 @@ function IncassoForm({inc, clienti, appuntamenti, onSave}) {
   const nomeCli = id => (clienti.find(c=>c.id===id)||{}).nome||"—";
   const wanted = (i._clienteNome||"").trim().toLowerCase();
   const cliMatch = clienti.find(c=>(c.nome||"").trim().toLowerCase()===wanted);
-  const appList = (appuntamenti||[]).filter(a=> cliMatch ? a.clienteId===cliMatch.id : true).sort((a,b)=>((b.data||"")+(b.ora||"")).localeCompare((a.data||"")+(a.ora||""))).slice(0,40);
+  const cliId = cliMatch ? cliMatch.id : null;
+  // mostra TUTTI gli appuntamenti, con quelli del cliente del pagamento in cima, poi per data recente
+  const appList = (appuntamenti||[]).slice().sort((a,b)=>{
+    const am = (cliId && a.clienteId===cliId)?0:1, bm = (cliId && b.clienteId===cliId)?0:1;
+    if(am!==bm) return am-bm;
+    return ((b.data||"")+(b.ora||"")).localeCompare((a.data||"")+(a.ora||""));
+  }).slice(0,60);
   return (
     <div>
       <Field label="Cliente / Artista">
