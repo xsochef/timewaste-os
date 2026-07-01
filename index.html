@@ -520,7 +520,7 @@ function Dashboard({data, setData, user, setView}) {
           {oggiApp.map(a=>(
             <div key={a.id} className="flex items-center gap-3 p-2 rounded-lg bg-[#0b0b13]">
               <div className="text-sm font-bold w-12 text-center">{oraVista(a)}</div>
-              <div className="flex-1 min-w-0"><div className="text-sm font-medium truncate">{a.tipo}</div><div className="text-xs text-slate-400 truncate">{nome(a.clienteId)} · {a.assegnatoA}</div></div>
+              <div className="flex-1 min-w-0"><div className="text-sm font-bold truncate">{nome(a.clienteId)}</div><div className="text-xs text-slate-400 truncate">{a.tipo}{a.assegnatoA && " · "+a.assegnatoA}</div></div>
               <Badge color={a.stato==="Completato"?"#34d399":a.stato==="Annullato"?"#f87171":"#fbbf24"}>{a.stato}</Badge>
               {a.stato!=="Completato" && <button onClick={()=>segnaFatta(a.id)} className="text-xs px-2 py-1 rounded-lg border border-[#26263a] text-slate-300 hover:bg-[#1a1a28]">✓ Fatta</button>}
             </div>
@@ -556,7 +556,7 @@ function Dashboard({data, setData, user, setView}) {
               {prossimi.map(a=>(
                 <div key={a.id} className="flex items-center gap-3 p-2 rounded-lg bg-[#0b0b13]">
                   <div className="text-center w-12"><div className="text-xs text-slate-400">{dataIt(a.data).slice(0,6)}</div><div className="text-sm font-bold">{oraVista(a)}</div></div>
-                  <div className="flex-1 min-w-0"><div className="text-sm font-medium truncate">{a.tipo}</div><div className="text-xs text-slate-400 truncate">{nome(a.clienteId)} · {a.assegnatoA}</div></div>
+                  <div className="flex-1 min-w-0"><div className="text-sm font-bold truncate">{nome(a.clienteId)}</div><div className="text-xs text-slate-400 truncate">{a.tipo}{a.assegnatoA && " · "+a.assegnatoA}</div></div>
                 </div>
               ))}
               {prossimi.length===0 && <p className="text-sm text-slate-500">Nessun appuntamento programmato.</p>}
@@ -924,8 +924,8 @@ function Calendario({data, setData, user}) {
                   <Card key={a.id} className="flex items-center gap-4 py-3">
                     <div className="text-center w-14 shrink-0"><div className="text-lg font-black">{oraVista(a)}</div><div className="text-[10px] text-slate-500">{a.durata}min</div></div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-semibold truncate">{a.tipo}</div>
-                      <div className="text-xs text-slate-400 truncate">{nome(a.clienteId)} {a.assegnatoA && "· "+a.assegnatoA}</div>
+                      <div className="text-base font-bold truncate">{nome(a.clienteId)}</div>
+                      <div className="text-xs text-slate-400 truncate">{a.tipo}{a.assegnatoA && " · "+a.assegnatoA}</div>
                       {a.note && <div className="text-xs text-slate-500 italic truncate">{a.note}</div>}
                     </div>
                     <Badge color={coloreStato(a.stato)}>{a.stato}</Badge>
@@ -1554,7 +1554,7 @@ function Cerca({data}) {
           <div>
             <div className="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-2">Appuntamenti ({app.length})</div>
             <div className="space-y-1.5">
-              {app.map(a=><Card key={a.id} className="py-2 flex items-center justify-between"><div className="min-w-0"><div className="text-sm font-medium truncate">{a.tipo} · {nome(a.clienteId)}</div><div className="text-xs text-slate-400">{dataIt(a.data)} {oraVista(a)}</div></div><Badge color={a.stato==="Completato"?"#34d399":a.stato==="Annullato"?"#f87171":"#fbbf24"}>{a.stato}</Badge></Card>)}
+              {app.map(a=><Card key={a.id} className="py-2 flex items-center justify-between"><div className="min-w-0"><div className="text-sm font-semibold truncate">{nome(a.clienteId)} <span className="text-slate-400 font-normal">· {a.tipo}</span></div><div className="text-xs text-slate-400">{dataIt(a.data)} {oraVista(a)}</div></div><Badge color={a.stato==="Completato"?"#34d399":a.stato==="Annullato"?"#f87171":"#fbbf24"}>{a.stato}</Badge></Card>)}
               {app.length===0 && <p className="text-sm text-slate-600">—</p>}
             </div>
           </div>
