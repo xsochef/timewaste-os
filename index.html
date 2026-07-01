@@ -866,28 +866,23 @@ function Calendario({data, setData, user}) {
           </div>
           <div className="grid grid-cols-7 gap-1">
             {celle.map((d,i)=>{
-              if(d===null) return <div key={"e"+i} className="min-h-[90px]"></div>;
+              if(d===null) return <div key={"e"+i} className="min-h-[58px]"></div>;
               const key=ymd(d); const apps=perGiorno[key]||[]; const isToday=key===oggi();
               return (
                 <div key={key} onClick={()=>setGiorno(key)}
-                  className={"min-h-[90px] rounded-lg border p-1.5 cursor-pointer transition hover:border-violet-500/60 "+(isToday?"border-violet-500 bg-violet-500/5":"border-[#1d1d2b] bg-[#0b0b13]")}>
-                  <div className={"text-xs font-bold mb-1 "+(isToday?"text-violet-300":"text-slate-400")}>{d}</div>
-                  <div className="space-y-1">
-                    {apps.slice(0,4).map(a=>{ const pr=provvDiApp(a.id); return (
-                      <div key={a.id} onClick={(e)=>{e.stopPropagation(); setModal(a);}}
-                        className="text-[10px] leading-tight rounded px-1 py-0.5 truncate cursor-pointer"
-                        style={{background:(pr?PROV_COLORI[pr.stato]:coloreStato(a.stato))+"22", color:pr?PROV_COLORI[pr.stato]:coloreStato(a.stato), borderLeft:"2px solid "+(pr?PROV_COLORI[pr.stato]:coloreStato(a.stato))}}
-                        title={oraVista(a)+" "+a.tipo+" · "+nome(a.clienteId)+(pr?" · provv. "+pr.perc+"% ("+pr.stato+")":"")}>
-                        <span className="font-bold">{oraVista(a)}</span> {nome(a.clienteId)}{pr && <span className="font-bold"> %{pr.perc}</span>}
-                      </div>
-                    );})}
-                    {apps.length>4 && <div className="text-[10px] text-slate-500 px-1">+{apps.length-4} altri</div>}
-                  </div>
+                  className={"min-h-[58px] rounded-lg border p-1 cursor-pointer transition hover:border-violet-500/60 flex flex-col items-center justify-start gap-1 "+(isToday?"border-violet-500/60 bg-violet-500/5":"border-[#1d1d2b] bg-[#0b0b13]")}>
+                  <div className={"text-sm font-bold w-7 h-7 grid place-items-center rounded-full "+(isToday?"bg-violet-500 text-white":"text-slate-300")}>{d}</div>
+                  {apps.length>0 && (
+                    <div className="flex items-center justify-center gap-0.5">
+                      {apps.slice(0,3).map((a,ix)=>{ const pr=provvDiApp(a.id); const col=pr?PROV_COLORI[pr.stato]:coloreStato(a.stato); return <span key={ix} className="w-1.5 h-1.5 rounded-full" style={{background:col}}></span>; })}
+                      {apps.length>3 && <span className="text-[9px] text-slate-400 ml-0.5">+{apps.length-3}</span>}
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
-          <p className="text-[11px] text-slate-500 mt-3 px-1">Clicca un giorno per vederne gli appuntamenti e crearne · clicca un appuntamento per aprirlo · orari nel fuso del tuo dispositivo</p>
+          <p className="text-[11px] text-slate-500 mt-3 px-1">Tocca un giorno per vederne gli appuntamenti e crearne · il puntino segna i giorni con sessioni</p>
         </Card>
       ) : vista==="settimana" ? (
         <Card className="p-3 md:p-4">
