@@ -107,7 +107,16 @@ const oraVista = (app) => {
   return String(Math.floor(tot/60)).padStart(2,"0")+":"+String(tot%60).padStart(2,"0");
 };
 // provvigioni: base = pagamenti del cliente nella data sessione; importo = base * perc
-const provBase = (p, incassi) => incassi.filter(i=>i.clienteId===p.clienteId && i.data===p.dataSessione).reduce((s,i)=>s+(Number(i.pagato)||0),0);
+// base automatica: pagamenti dello stesso cliente nella data della sessione
+const provBaseAuto = (p, incassi) => incassi.filter(i=>i.clienteId===p.clienteId && i.data===p.dataSessione).reduce((s,i)=>s+(Number(i.pagato)||0),0);
+// base effettiva: 1) pagamento collegato a mano, 2) pagamento collegato all'appuntamento, 3) importo a mano, 4) aggancio automatico cliente+data
+const provBase = (p, incassi) => {
+  if(p.incassoId){ const inc=incassi.find(x=>x.id===p.incassoId); if(inc) return Number(inc.pagato)||0; }
+  const linked = incassi.filter(i=>i.appuntamentoId && i.appuntamentoId===p.appuntamentoId);
+  if(linked.length) return linked.reduce((s,i)=>s+(Number(i.pagato)||0),0);
+  if(p.base!=null && p.base!=="") return Number(p.base);
+  return provBaseAuto(p, incassi);
+};
 const provImporto = (p, incassi) => Math.round(provBase(p,incassi)*(Number(p.perc)||0)/100);
 const PROV_COLORI = { richiesta:"#fbbf24", approvata:"#34d399", liquidata:"#a78bfa", rifiutata:"#f87171" };
 
@@ -786,10 +795,11 @@ function Calendario({data, setData, user}) {
         }
       }
       const app = {...appBase, clienteId, tzOff: aheadDispositivo(appBase.data||oggi())}; // orario salvato nel fuso di chi salva
-      const appuntamenti = app.id ? d.appuntamenti.map(x=>x.id===app.id?app:x) : [...d.appuntamenti,{...app,id:uid(),creato:oggi()}];
+      const appId = app.id || uid();
+      const appuntamenti = app.id ? d.appuntamenti.map(x=>x.id===app.id?app:x) : [...d.appuntamenti,{...app,id:appId,creato:oggi()}];
       let incassi = d.incassi;
       if(_genIncasso && Number(_importo)>0){
-        incassi = [...incassi, {id:uid(), clienteId:clienteId, descrizione:app.tipo||"Sessione", totale:Number(_importo), pagato:Number(_importo), metodo:_metodo||"Contanti", stato:"Saldato", data:app.data||oggi(), registratoDa:"Carlo"}];
+        incassi = [...incassi, {id:uid(), clienteId:clienteId, appuntamentoId:appId, descrizione:app.tipo||"Sessione", totale:Number(_importo), pagato:Number(_importo), metodo:_metodo||"Contanti", stato:"Saldato", data:app.data||oggi(), registratoDa:"Carlo"}];
       }
       return {...d, clienti, appuntamenti, incassi};
     });
@@ -1132,20 +1142,30 @@ function Fatturato({data, setData, user}) {
 
       {modal && (
         <Modal title={modal.id?"Modifica incasso":"Registra incasso"} onClose={()=>setModal(null)}>
-          <IncassoForm inc={modal} clienti={data.clienti} onSave={salvaInc} />
+          <IncassoForm inc={modal} clienti={data.clienti} appuntamenti={data.appuntamenti} onSave={salvaInc} />
         </Modal>
       )}
     </div>
   );
 }
-function IncassoForm({inc, clienti, onSave}) {
+function IncassoForm({inc, clienti, appuntamenti, onSave}) {
   const [i,setI]=useState(()=>({...inc, _clienteNome: inc.clienteId ? ((clienti.find(c=>c.id===inc.clienteId)||{}).nome||"") : (inc._clienteNome||"") }));
   const set=(k,v)=>setI(p=>({...p,[k]:v}));
+  const nomeCli = id => (clienti.find(c=>c.id===id)||{}).nome||"—";
+  const wanted = (i._clienteNome||"").trim().toLowerCase();
+  const cliMatch = clienti.find(c=>(c.nome||"").trim().toLowerCase()===wanted);
+  const appList = (appuntamenti||[]).filter(a=> cliMatch ? a.clienteId===cliMatch.id : true).sort((a,b)=>((b.data||"")+(b.ora||"")).localeCompare((a.data||"")+(a.ora||""))).slice(0,40);
   return (
     <div>
       <Field label="Cliente / Artista">
         <input value={i._clienteNome||""} onChange={e=>set("_clienteNome",e.target.value)} list="clientiListInc" placeholder="Scrivi il nome — se non esiste viene creato (vuoto = generico)" className={inputCls} />
         <datalist id="clientiListInc">{clienti.map(c=><option key={c.id} value={c.nome} />)}</datalist>
+      </Field>
+      <Field label="Collega ad appuntamento (facoltativo)">
+        <select value={i.appuntamentoId||""} onChange={e=>set("appuntamentoId", e.target.value)} className={inputCls}>
+          <option value="">— nessuno —</option>
+          {appList.map(a=><option key={a.id} value={a.id}>{dataIt(a.data)} {oraVista(a)} · {a.tipo} · {nomeCli(a.clienteId)}</option>)}
+        </select>
       </Field>
       <Field label="Tipo di lavoro">
         <input value={i.descrizione} onChange={e=>set("descrizione",e.target.value)} list="tipiLavoroInc" placeholder="Scegli o scrivi…" className={inputCls} />
@@ -1552,18 +1572,42 @@ function Provvigioni({data, setData, user}) {
   const provv = data.provvigioni||[];
   const nome = id=>(data.clienti.find(c=>c.id===id)||{}).nome||"—";
   const setStato = (id,stato)=> setData(d=>({...d, provvigioni:(d.provvigioni||[]).map(p=>p.id===id?{...p,stato}:p)}));
+  const setBase = (id,val)=> setData(d=>({...d, provvigioni:(d.provvigioni||[]).map(p=>p.id===id?{...p, base:(val===""?null:Number(val))}:p)}));
+  const setIncasso = (id,incassoId)=> setData(d=>({...d, provvigioni:(d.provvigioni||[]).map(p=>p.id===id?{...p, incassoId:(incassoId||undefined)}:p)}));
+  const pagamentiCliente = (p)=> data.incassi.filter(i=>i.clienteId===p.clienteId || !i.clienteId).sort((a,b)=>(b.data||"").localeCompare(a.data||"")).slice(0,25);
   const elimina = (id)=>{ if(confirm("Eliminare questa richiesta?")) setData(d=>({...d, provvigioni:(d.provvigioni||[]).filter(p=>p.id!==id)})); };
   const isG = user==="giuseppe";
   const visibili = isG ? provv : provv.filter(p=>p.richiestoDa===UTENTI[user].nome);
   const byStato = (s)=> visibili.filter(p=>p.stato===s).sort((a,b)=>(b.dataSessione||"").localeCompare(a.dataSessione||""));
-  const Riga = ({p, children})=>{ const base=provBase(p,data.incassi); const imp=provImporto(p,data.incassi); return (
-    <Card className="py-3 flex items-center gap-3">
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-semibold truncate">{nome(p.clienteId)} <span className="text-slate-400 font-normal">· {dataIt(p.dataSessione)}</span></div>
-        <div className="text-xs text-slate-400">{p.perc}% {base>0 ? "di "+euro(base)+" = "+euro(imp) : "· pagamento non ancora registrato"}</div>
+  const Riga = ({p, children})=>{ const auto=provBaseAuto(p,data.incassi); const base=provBase(p,data.incassi); const imp=provImporto(p,data.incassi); return (
+    <Card className="py-3">
+      <div className="flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-semibold truncate">{nome(p.clienteId)} <span className="text-slate-400 font-normal">· {dataIt(p.dataSessione)}</span></div>
+          <div className="text-xs text-slate-400">{p.perc}% {base>0 ? "di "+euro(base)+" = "+euro(imp) : "· importo da confermare"}</div>
+        </div>
+        <Badge color={PROV_COLORI[p.stato]}>{p.stato}</Badge>
+        {children}
       </div>
-      <Badge color={PROV_COLORI[p.stato]}>{p.stato}</Badge>
-      {children}
+      {isG && (
+        <div className="mt-2 pt-2 border-t border-[#1d1d2b] space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] text-slate-500 w-32">Pagamento collegato:</span>
+            <select value={p.incassoId||""} onChange={e=>setIncasso(p.id, e.target.value)} className={inputCls+" max-w-[280px] py-1 text-sm"}>
+              <option value="">— automatico / a mano —</option>
+              {pagamentiCliente(p).map(i=><option key={i.id} value={i.id}>{dataIt(i.data)} · {euro(i.pagato)} · {i.descrizione||"—"}{i.clienteId?"":" (generico)"}</option>)}
+            </select>
+          </div>
+          {!p.incassoId && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] text-slate-500 w-32">…oppure base € a mano:</span>
+              <input type="number" value={p.base!=null?p.base:""} onChange={e=>setBase(p.id, e.target.value)} placeholder={auto>0?String(auto):"importo"} className={inputCls+" max-w-[120px] py-1 text-sm"} />
+              {p.base==null && auto>0 && <span className="text-[11px] text-emerald-400">auto: {euro(auto)} ✓</span>}
+              {p.base==null && auto===0 && <span className="text-[11px] text-amber-400">nessun pagamento agganciato in automatico</span>}
+            </div>
+          )}
+        </div>
+      )}
     </Card>
   );};
   const totApprovate = visibili.filter(p=>["approvata","liquidata"].includes(p.stato)).reduce((s,p)=>s+provImporto(p,data.incassi),0);
@@ -1571,7 +1615,7 @@ function Provvigioni({data, setData, user}) {
   return (
     <div className="fade-in">
       <h1 className="text-2xl font-black mb-1">Provvigioni</h1>
-      <p className="text-slate-400 text-sm mb-5">{isG ? "Approva le richieste di Francesco. Le approvate vengono detratte dal lordo settimanale in Cassa." : "Le tue richieste di provvigione. Vengono approvate da Giuseppe."}</p>
+      <p className="text-slate-400 text-sm mb-5">{isG ? "Approva le richieste di Francesco e conferma l'importo base (se pagamento e appuntamento non combaciano, scrivilo a mano). Le approvate vengono detratte dal lordo settimanale in Cassa." : "Le tue richieste di provvigione. Vengono approvate da Giuseppe."}</p>
 
       {isG && byStato("richiesta").length>0 && (
         <div className="mb-6">
