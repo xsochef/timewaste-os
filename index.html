@@ -90,6 +90,22 @@ const euro = (n) => "€ " + (Number(n)||0).toLocaleString("it-IT",{minimumFract
 const oggi = () => new Date().toISOString().slice(0,10);
 const dataIt = (s) => s ? new Date(s+"T00:00:00").toLocaleDateString("it-IT",{day:"2-digit",month:"short",year:"numeric"}) : "";
 const lunediISO = (ds) => { const d=new Date(ds+"T00:00:00"); const off=(d.getDay()+6)%7; d.setDate(d.getDate()-off); return d.toISOString().slice(0,10); };
+// ---- FUSO ORARIO: gli orari si convertono nel fuso di chi guarda ----
+// minuti a EST di UTC del dispositivo per una certa data (Italia estate = +120, Canarie estate = +60)
+const aheadDispositivo = (ds) => -(new Date((ds||oggi())+"T00:00:00").getTimezoneOffset());
+// minuti a EST di UTC di una zona IANA per una certa data (per gli appuntamenti storici = Italia)
+const aheadZona = (ds, zone) => { try{ const d=new Date((ds||oggi())+"T12:00:00Z"); const tz=new Date(d.toLocaleString('en-US',{timeZone:zone})); const u=new Date(d.toLocaleString('en-US',{timeZone:'UTC'})); return Math.round((tz-u)/60000); }catch(e){ return null; } };
+// ora dell'appuntamento convertita nel fuso del dispositivo che guarda
+const oraVista = (app) => {
+  if(!app || !app.ora) return (app && app.ora) || "";
+  const data = app.data || oggi();
+  const aV = aheadDispositivo(data);
+  let aC = (app.tzOff!=null) ? Number(app.tzOff) : aheadZona(data,'Europe/Rome'); // storici = orario studio Italia
+  if(aC==null) aC = aV;
+  const p = (app.ora||"00:00").split(":"); let tot = (parseInt(p[0],10)||0)*60 + (parseInt(p[1],10)||0) + (aV - aC);
+  tot = ((tot%1440)+1440)%1440;
+  return String(Math.floor(tot/60)).padStart(2,"0")+":"+String(tot%60).padStart(2,"0");
+};
 // provvigioni: base = pagamenti del cliente nella data sessione; importo = base * perc
 const provBase = (p, incassi) => incassi.filter(i=>i.clienteId===p.clienteId && i.data===p.dataSessione).reduce((s,i)=>s+(Number(i.pagato)||0),0);
 const provImporto = (p, incassi) => Math.round(provBase(p,incassi)*(Number(p.perc)||0)/100);
@@ -494,7 +510,7 @@ function Dashboard({data, setData, user, setView}) {
         <div className="space-y-2">
           {oggiApp.map(a=>(
             <div key={a.id} className="flex items-center gap-3 p-2 rounded-lg bg-[#0b0b13]">
-              <div className="text-sm font-bold w-12 text-center">{a.ora}</div>
+              <div className="text-sm font-bold w-12 text-center">{oraVista(a)}</div>
               <div className="flex-1 min-w-0"><div className="text-sm font-medium truncate">{a.tipo}</div><div className="text-xs text-slate-400 truncate">{nome(a.clienteId)} · {a.assegnatoA}</div></div>
               <Badge color={a.stato==="Completato"?"#34d399":a.stato==="Annullato"?"#f87171":"#fbbf24"}>{a.stato}</Badge>
               {a.stato!=="Completato" && <button onClick={()=>segnaFatta(a.id)} className="text-xs px-2 py-1 rounded-lg border border-[#26263a] text-slate-300 hover:bg-[#1a1a28]">✓ Fatta</button>}
@@ -530,7 +546,7 @@ function Dashboard({data, setData, user, setView}) {
             <div className="space-y-2">
               {prossimi.map(a=>(
                 <div key={a.id} className="flex items-center gap-3 p-2 rounded-lg bg-[#0b0b13]">
-                  <div className="text-center w-12"><div className="text-xs text-slate-400">{dataIt(a.data).slice(0,6)}</div><div className="text-sm font-bold">{a.ora}</div></div>
+                  <div className="text-center w-12"><div className="text-xs text-slate-400">{dataIt(a.data).slice(0,6)}</div><div className="text-sm font-bold">{oraVista(a)}</div></div>
                   <div className="flex-1 min-w-0"><div className="text-sm font-medium truncate">{a.tipo}</div><div className="text-xs text-slate-400 truncate">{nome(a.clienteId)} · {a.assegnatoA}</div></div>
                 </div>
               ))}
@@ -683,7 +699,7 @@ function ClienteDettaglio({cliente, data, onEdit}) {
                 <div className="text-sm font-bold">{dataIt(d)}</div>
                 {pagGiorno>0 && <div className="text-sm font-black text-emerald-400">{euro(pagGiorno)}</div>}
               </div>
-              {o.sess.map(a=><div key={a.id} className="text-xs text-slate-300">🎧 {a.ora && a.ora+" · "}{a.tipo} {a.durata && "("+a.durata+"min)"}</div>)}
+              {o.sess.map(a=><div key={a.id} className="text-xs text-slate-300">🎧 {a.ora && oraVista(a)+" · "}{a.tipo} {a.durata && "("+a.durata+"min)"}</div>)}
               {o.pag.map(i=><div key={i.id} className="text-xs text-slate-400">💶 {i.descrizione||"Pagamento"} · {i.metodo} {i.stato==="Acconto" && "· acconto"}</div>)}
               {o.sess.length===0 && o.pag.length>0 && <div className="text-[11px] text-slate-600">(pagamento senza sessione registrata)</div>}
             </div>
@@ -769,7 +785,7 @@ function Calendario({data, setData, user}) {
           clienti = [...d.clienti, nc]; clienteId = nc.id;
         }
       }
-      const app = {...appBase, clienteId};
+      const app = {...appBase, clienteId, tzOff: aheadDispositivo(appBase.data||oggi())}; // orario salvato nel fuso di chi salva
       const appuntamenti = app.id ? d.appuntamenti.map(x=>x.id===app.id?app:x) : [...d.appuntamenti,{...app,id:uid(),creato:oggi()}];
       let incassi = d.incassi;
       if(_genIncasso && Number(_importo)>0){
@@ -840,8 +856,8 @@ function Calendario({data, setData, user}) {
                       <div key={a.id} onClick={(e)=>{e.stopPropagation(); setModal(a);}}
                         className="text-[10px] leading-tight rounded px-1 py-0.5 truncate cursor-pointer"
                         style={{background:(pr?PROV_COLORI[pr.stato]:coloreStato(a.stato))+"22", color:pr?PROV_COLORI[pr.stato]:coloreStato(a.stato), borderLeft:"2px solid "+(pr?PROV_COLORI[pr.stato]:coloreStato(a.stato))}}
-                        title={a.ora+" "+a.tipo+" · "+nome(a.clienteId)+(pr?" · provv. "+pr.perc+"% ("+pr.stato+")":"")}>
-                        <span className="font-bold">{a.ora}</span> {nome(a.clienteId)}{pr && <span className="font-bold"> %{pr.perc}</span>}
+                        title={oraVista(a)+" "+a.tipo+" · "+nome(a.clienteId)+(pr?" · provv. "+pr.perc+"% ("+pr.stato+")":"")}>
+                        <span className="font-bold">{oraVista(a)}</span> {nome(a.clienteId)}{pr && <span className="font-bold"> %{pr.perc}</span>}
                       </div>
                     );})}
                     {apps.length>4 && <div className="text-[10px] text-slate-500 px-1">+{apps.length-4} altri</div>}
@@ -850,7 +866,7 @@ function Calendario({data, setData, user}) {
               );
             })}
           </div>
-          <p className="text-[11px] text-slate-500 mt-3 px-1">Clicca un giorno per aggiungere · clicca un appuntamento per modificarlo</p>
+          <p className="text-[11px] text-slate-500 mt-3 px-1">Clicca un giorno per aggiungere · clicca un appuntamento per modificarlo · orari mostrati nel fuso del tuo dispositivo</p>
         </Card>
       ) : (
         <div className="space-y-5">
@@ -860,7 +876,7 @@ function Calendario({data, setData, user}) {
               <div className="space-y-2">
                 {gruppi[g].sort((a,b)=>a.ora.localeCompare(b.ora)).map(a=>(
                   <Card key={a.id} className="flex items-center gap-4 py-3">
-                    <div className="text-center w-14 shrink-0"><div className="text-lg font-black">{a.ora}</div><div className="text-[10px] text-slate-500">{a.durata}min</div></div>
+                    <div className="text-center w-14 shrink-0"><div className="text-lg font-black">{oraVista(a)}</div><div className="text-[10px] text-slate-500">{a.durata}min</div></div>
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold truncate">{a.tipo}</div>
                       <div className="text-xs text-slate-400 truncate">{nome(a.clienteId)} {a.assegnatoA && "· "+a.assegnatoA}</div>
@@ -890,7 +906,7 @@ function Calendario({data, setData, user}) {
   );
 }
 function AppForm({app, clienti, onSave, onDelete, user, provv, onProvvigione}) {
-  const [a, setA] = useState(()=>({...app, _clienteNome: app.clienteId ? ((clienti.find(c=>c.id===app.clienteId)||{}).nome||"") : (app._clienteNome||"") }));
+  const [a, setA] = useState(()=>({...app, ora: app.id ? oraVista(app) : (app.ora||"15:00"), _clienteNome: app.clienteId ? ((clienti.find(c=>c.id===app.clienteId)||{}).nome||"") : (app._clienteNome||"") }));
   const [percP, setPercP] = useState(provv?String(provv.perc):"10");
   const set=(k,v)=>setA(p=>({...p,[k]:v}));
   const puoProvv = user==="francesco" && a.id && a.creato; // solo sessioni nuove (inserite da oggi)
@@ -999,10 +1015,25 @@ function Fatturato({data, setData, user}) {
   const [meseF, setMeseF] = useState("");
   const vuoto = {clienteId:"",descrizione:"",totale:"",pagato:"",metodo:"Bonifico",stato:"",data:oggi(),registratoDa:UTENTI[user].nome};
   const salvaInc = (i) => {
-    const t=Number(i.totale)||0, p=Number(i.pagato)||0;
+    const {_clienteNome, ...base} = i;
+    const t=Number(base.totale)||0, p=Number(base.pagato)||0;
     const auto = (p>=t && t>0) ? "Saldato" : (p>0 ? "Acconto" : "Da pagare");
-    const rec = {...i, stato: i.stato || auto };
-    setData(d=>{ const incassi = i.id ? d.incassi.map(x=>x.id===i.id?rec:x) : [...d.incassi,{...rec,id:uid()}]; return {...d,incassi}; });
+    setData(d=>{
+      let clienti = d.clienti;
+      let clienteId = base.clienteId || "";
+      const nomeWanted = (_clienteNome||"").trim();
+      if(nomeWanted){
+        const found = d.clienti.find(c=>(c.nome||"").trim().toLowerCase()===nomeWanted.toLowerCase());
+        if(found){ clienteId = found.id; }
+        else {
+          const nc = {id:uid(), nome:nomeWanted, genere:"", telefono:"", email:"", instagram:"", provenienza:"Italia", stato:"Lead", pacchetto:"", assegnatoA:"", note:"", creato:oggi()};
+          clienti = [...d.clienti, nc]; clienteId = nc.id;
+        }
+      } else { clienteId = ""; }
+      const rec = {...base, clienteId, stato: base.stato || auto};
+      const incassi = rec.id ? d.incassi.map(x=>x.id===rec.id?rec:x) : [...d.incassi,{...rec,id:uid()}];
+      return {...d, clienti, incassi};
+    });
     setModal(null);
   };
   const elimina=(id)=>{ if(confirm("Eliminare la voce?")) setData(d=>({...d,incassi:d.incassi.filter(i=>i.id!==id)})); };
@@ -1108,15 +1139,13 @@ function Fatturato({data, setData, user}) {
   );
 }
 function IncassoForm({inc, clienti, onSave}) {
-  const [i,setI]=useState(inc);
+  const [i,setI]=useState(()=>({...inc, _clienteNome: inc.clienteId ? ((clienti.find(c=>c.id===inc.clienteId)||{}).nome||"") : (inc._clienteNome||"") }));
   const set=(k,v)=>setI(p=>({...p,[k]:v}));
   return (
     <div>
-      <Field label="Cliente">
-        <select value={i.clienteId} onChange={e=>set("clienteId",e.target.value)} className={inputCls}>
-          <option value="">— Generico —</option>
-          {clienti.map(c=><option key={c.id} value={c.id}>{c.nome}</option>)}
-        </select>
+      <Field label="Cliente / Artista">
+        <input value={i._clienteNome||""} onChange={e=>set("_clienteNome",e.target.value)} list="clientiListInc" placeholder="Scrivi il nome — se non esiste viene creato (vuoto = generico)" className={inputCls} />
+        <datalist id="clientiListInc">{clienti.map(c=><option key={c.id} value={c.nome} />)}</datalist>
       </Field>
       <Field label="Tipo di lavoro">
         <input value={i.descrizione} onChange={e=>set("descrizione",e.target.value)} list="tipiLavoroInc" placeholder="Scegli o scrivi…" className={inputCls} />
@@ -1444,7 +1473,7 @@ function Cerca({data}) {
           <div>
             <div className="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-2">Appuntamenti ({app.length})</div>
             <div className="space-y-1.5">
-              {app.map(a=><Card key={a.id} className="py-2 flex items-center justify-between"><div className="min-w-0"><div className="text-sm font-medium truncate">{a.tipo} · {nome(a.clienteId)}</div><div className="text-xs text-slate-400">{dataIt(a.data)} {a.ora}</div></div><Badge color={a.stato==="Completato"?"#34d399":a.stato==="Annullato"?"#f87171":"#fbbf24"}>{a.stato}</Badge></Card>)}
+              {app.map(a=><Card key={a.id} className="py-2 flex items-center justify-between"><div className="min-w-0"><div className="text-sm font-medium truncate">{a.tipo} · {nome(a.clienteId)}</div><div className="text-xs text-slate-400">{dataIt(a.data)} {oraVista(a)}</div></div><Badge color={a.stato==="Completato"?"#34d399":a.stato==="Annullato"?"#f87171":"#fbbf24"}>{a.stato}</Badge></Card>)}
               {app.length===0 && <p className="text-sm text-slate-600">—</p>}
             </div>
           </div>
