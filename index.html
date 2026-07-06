@@ -1145,6 +1145,7 @@ function Fatturato({data, setData, user}) {
   const [ordine, setOrdine] = useState("recenti"); // recenti | vecchi
   const [meseF, setMeseF] = useState("");
   const [raggr, setRaggr] = useState("elenco"); // elenco | mese | settimana
+  const [aperte, setAperte] = useState({}); // settimane aperte nell'elenco
   const vuoto = {clienteId:"",descrizione:"",totale:"",pagato:"",metodo:"Bonifico",stato:"",data:oggi(),registratoDa:UTENTI[user].nome};
   const salvaInc = (i) => {
     const {_clienteNome, ...base} = i;
@@ -1204,6 +1205,8 @@ function Fatturato({data, setData, user}) {
     return Object.keys(m).sort().reverse().map(w=>{ const lordo=m[w].lordo; const prov=provvSettMap[w]||0; const spese=speseSettF+prov; const netto=Math.max(0,lordo-spese); const qa=netto*splitPercF/100; return { key:w, n:m[w].n, lordo, spese, netto, qa, qb:netto-qa }; }); })();
   const meseRows = (()=>{ const m={}; settRows.forEach(r=>{ const mo=r.key.slice(0,7); if(!m[mo]) m[mo]={n:0,lordo:0,spese:0,netto:0,qa:0,qb:0}; const o=m[mo]; o.n+=r.n; o.lordo+=r.lordo; o.spese+=r.spese; o.netto+=r.netto; o.qa+=r.qa; o.qb+=r.qb; });
     return Object.entries(m).sort((a,b)=>b[0].localeCompare(a[0])); })();
+  // elenco raggruppato per settimana (dalla più recente)
+  const elencoSett = (()=>{ const m={}; ordinati.forEach(i=>{ if(!i.data) return; const w=lunediF(i.data); (m[w]=m[w]||[]).push(i); }); return Object.keys(m).sort().reverse().map(w=>({ w, items:m[w], tot:m[w].reduce((s,i)=>s+(Number(i.pagato)||0),0) })); })();
 
   return (
     <div className="fade-in">
@@ -1299,24 +1302,40 @@ function Fatturato({data, setData, user}) {
           <p className="text-[11px] text-slate-500 mt-3">Spese fisse: {euro(localeF)} locale + {euro(benzinaF)} benzina = {euro(speseSettF)}, più provvigioni Francesco · ripartizione {splitPercF}/{100-splitPercF}.</p>
         </Card>
       )}
-      {(!VEDE_TOTALI[user] || raggr==="elenco") && <div className="space-y-2">
-        {ordinati.map(i=>(
-          <Card key={i.id} className="flex items-center gap-4 py-3">
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold truncate">{nome(i.clienteId)} <span className="text-slate-400 font-normal">· {i.descrizione||"—"}</span></div>
-              <div className="text-xs text-slate-400">{dataIt(i.data)} · {i.metodo} · reg. {i.registratoDa}</div>
-            </div>
-            <div className="text-right shrink-0">
-              <div className="font-bold">{euro(i.pagato)} <span className="text-slate-500 font-normal text-xs">/ {euro(i.totale)}</span></div>
-              <Badge color={i.stato==="Saldato"?"#34d399":i.stato==="Acconto"?"#fbbf24":"#f87171"}>{i.stato}</Badge>
-            </div>
-            <div className="flex flex-col gap-1 shrink-0">
-              <button onClick={()=>setModal(i)} className="text-xs text-slate-400 hover:text-white">Modifica</button>
-              <button onClick={()=>elimina(i.id)} className="text-xs text-red-400/70 hover:text-red-400">Elimina</button>
-            </div>
-          </Card>
-        ))}
-        {ordinati.length===0 && <Card className="text-center text-slate-500 py-10">Nessun incasso registrato.</Card>}
+      {(!VEDE_TOTALI[user] || raggr==="elenco") && <div className="space-y-3">
+        {elencoSett.map((g,idx)=>{ const open = aperte[g.w]!==undefined ? aperte[g.w] : idx===0; return (
+          <div key={g.w}>
+            <button onClick={()=>setAperte(p=>({...p,[g.w]:!open}))} className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-[#0b0b13] border border-[#1d1d2b] hover:border-[#2a2a3a]">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-slate-500 text-xs">{open?"▾":"▸"}</span>
+                <span className="font-semibold truncate">{rangeSettF(g.w)}</span>
+                <span className="text-xs text-slate-500 whitespace-nowrap">· {g.items.length} pagament{g.items.length===1?"o":"i"}</span>
+              </div>
+              <span className="font-bold text-emerald-400 shrink-0">{euro(g.tot)}</span>
+            </button>
+            {open && (
+              <div className="space-y-2 mt-2">
+                {g.items.map(i=>(
+                  <Card key={i.id} className="flex items-center gap-4 py-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold truncate">{nome(i.clienteId)} <span className="text-slate-400 font-normal">· {i.descrizione||"—"}</span></div>
+                      <div className="text-xs text-slate-400">{dataIt(i.data)} · {i.metodo} · reg. {i.registratoDa}</div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-bold">{euro(i.pagato)} <span className="text-slate-500 font-normal text-xs">/ {euro(i.totale)}</span></div>
+                      <Badge color={i.stato==="Saldato"?"#34d399":i.stato==="Acconto"?"#fbbf24":"#f87171"}>{i.stato}</Badge>
+                    </div>
+                    <div className="flex flex-col gap-1 shrink-0">
+                      <button onClick={()=>setModal(i)} className="text-xs text-slate-400 hover:text-white">Modifica</button>
+                      <button onClick={()=>elimina(i.id)} className="text-xs text-red-400/70 hover:text-red-400">Elimina</button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        );})}
+        {elencoSett.length===0 && <Card className="text-center text-slate-500 py-10">Nessun incasso registrato.</Card>}
       </div>}
 
       {modal && (
