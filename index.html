@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
 <title>TIMEWASTE OS — Gestionale Studio</title>
 <!-- PWA / iPhone -->
 <meta name="theme-color" content="#08080c" />
@@ -21,6 +21,13 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  /* --- Stabilita mobile: stop zoom automatico iOS + niente drift orizzontale --- */
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  html, body { overflow-x: hidden; max-width: 100%; }
+  /* niente doppio-tap che zooma */
+  body { touch-action: manipulation; }
+  /* iOS zooma sui campi < 16px al focus: forziamo 16px */
+  input, select, textarea { font-size: 16px !important; }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: #0c0c12; }
   ::-webkit-scrollbar-thumb { background: #2a2a38; border-radius: 6px; }
