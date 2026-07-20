@@ -145,6 +145,14 @@ const provBase = (p, incassi) => {
   return provBaseAuto(p, incassi);
 };
 const provImporto = (p, incassi) => Math.round(provBase(p,incassi)*(Number(p.perc)||0)/100);
+// data di competenza: la provvigione pesa sulla settimana del PAGAMENTO su cui è calcolata
+// (se la sessione è in un'altra data/settimana, i conti restano allineati alla cassa incassata)
+const provData = (p, incassi) => {
+  if(p.incassoId){ const inc=incassi.find(x=>x.id===p.incassoId); if(inc && inc.data) return inc.data; }
+  const linked = incassi.filter(i=>i.appuntamentoId && i.appuntamentoId===p.appuntamentoId && i.data);
+  if(linked.length) return linked.map(i=>i.data).sort()[0];
+  return p.dataSessione;
+};
 const PROV_COLORI = { richiesta:"#fbbf24", approvata:"#34d399", liquidata:"#a78bfa", rifiutata:"#f87171" };
 
 // ---------- UI HELPERS ----------
@@ -1230,7 +1238,7 @@ function Fatturato({data, setData, user}) {
   const settW = lunediF(oggi());
   const lordoW = data.incassi.filter(i=>i.data && lunediF(i.data)===settW).reduce((s,i)=>s+(Number(i.pagato)||0),0);
   const targetW = 5000;
-  const provvW = (data.provvigioni||[]).filter(p=>["approvata","liquidata"].includes(p.stato) && lunediF(p.dataSessione)===settW).reduce((s,p)=>s+provImporto(p,data.incassi),0);
+  const provvW = (data.provvigioni||[]).filter(p=>["approvata","liquidata"].includes(p.stato) && lunediF(provData(p,data.incassi))===settW).reduce((s,p)=>s+provImporto(p,data.incassi),0);
   const nettoW = Math.max(0, lordoW - speseSettF - provvW);
   const percW = Math.min(100, Math.round(lordoW/targetW*100));
   const splitPercF = cfgF.splitPerc!=null?Number(cfgF.splitPerc):50;
@@ -1238,7 +1246,7 @@ function Fatturato({data, setData, user}) {
   const qAF = nettoW*splitPercF/100; const qBF = nettoW-qAF;
   // riepiloghi aggregati (per Giuseppe): lordo, spese fisse+provv, netto, quote
   const provvSettMap = {};
-  (data.provvigioni||[]).filter(p=>["approvata","liquidata"].includes(p.stato)).forEach(p=>{ if(!p.dataSessione) return; const w=lunediF(p.dataSessione); provvSettMap[w]=(provvSettMap[w]||0)+provImporto(p,data.incassi); });
+  (data.provvigioni||[]).filter(p=>["approvata","liquidata"].includes(p.stato)).forEach(p=>{ const dRif=provData(p,data.incassi); if(!dRif) return; const w=lunediF(dRif); provvSettMap[w]=(provvSettMap[w]||0)+provImporto(p,data.incassi); });
   const settRows = (()=>{ const m={}; data.incassi.forEach(i=>{ if(!i.data) return; const w=lunediF(i.data); if(!m[w]) m[w]={lordo:0,n:0}; m[w].lordo+=(Number(i.pagato)||0); m[w].n++; });
     return Object.keys(m).sort().reverse().map(w=>{ const lordo=m[w].lordo; const prov=provvSettMap[w]||0; const spese=speseSettF+prov; const netto=Math.max(0,lordo-spese); const qa=netto*splitPercF/100; return { key:w, n:m[w].n, lordo, spese, netto, qa, qb:netto-qa }; }); })();
   const meseRows = (()=>{ const m={}; settRows.forEach(r=>{ const mo=r.key.slice(0,7); if(!m[mo]) m[mo]={n:0,lordo:0,spese:0,netto:0,qa:0,qb:0}; const o=m[mo]; o.n+=r.n; o.lordo+=r.lordo; o.spese+=r.spese; o.netto+=r.netto; o.qa+=r.qa; o.qb+=r.qb; });
@@ -1642,7 +1650,7 @@ function Cassa({data, setData}) {
   const W = {};
   filtro.forEach(i=>{ if(!i.data) return; const w=lunedi(i.data); const o=W[w]||(W[w]={inc:0,Contanti:0,Carta:0,Altro:0}); const imp=Number(i.pagato)||0; o.inc+=imp; const k=i.metodo==="Contanti"?"Contanti":i.metodo==="Carta"?"Carta":"Altro"; o[k]+=imp; });
   const provvList = data.provvigioni||[];
-  const provvSett = (w)=> provvList.filter(p=>["approvata","liquidata"].includes(p.stato) && lunediISO(p.dataSessione)===w).reduce((s,p)=>s+provImporto(p,data.incassi),0);
+  const provvSett = (w)=> provvList.filter(p=>["approvata","liquidata"].includes(p.stato) && lunediISO(provData(p,data.incassi))===w).reduce((s,p)=>s+provImporto(p,data.incassi),0);
   const settimane = Object.keys(W).sort().reverse().map(w=>{ const o=W[w]; const prov=provvSett(w); const netto=Math.max(0,o.inc-speseSett-prov); const a=netto*splitPerc/100; return {w, ...o, spese:speseSett, prov, netto, quotaA:a, quotaB:netto-a}; });
   const tot = settimane.reduce((s,x)=>({inc:s.inc+x.inc, contanti:s.contanti+x.Contanti, carta:s.carta+x.Carta, spese:s.spese+x.spese, prov:s.prov+x.prov, netto:s.netto+x.netto, qA:s.qA+x.quotaA, qB:s.qB+x.quotaB}), {inc:0,contanti:0,carta:0,spese:0,prov:0,netto:0,qA:0,qB:0});
 
