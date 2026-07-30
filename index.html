@@ -1793,10 +1793,12 @@ function Cerca({data}) {
 // ============================================================
 function Contenuti({data, setData, user}) {
   const [lista, setLista] = useState(null);          // null = caricamento
+  const [brevi, setBrevi] = useState({});            // id -> versione breve (riga id=3)
   const [aggiornato, setAggiornato] = useState(null);
   const [aperto, setAperto] = useState(null);
   const [copiato, setCopiato] = useState(null);
   const [soloScelti, setSoloScelti] = useState(false);
+  const [mostraCompleta, setMostraCompleta] = useState({}); // id -> true = mostra versione originale lunga
 
   useEffect(()=>{
     if(!SUPA_ON){ setLista([]); return; }
@@ -1807,9 +1809,15 @@ function Contenuti({data, setData, user}) {
         setLista((row && row.data && row.data.guiones) || []);
         setAggiornato(row && row.data && row.data.aggiornato || null);
       }catch(e){ setLista([]); }
+      try{
+        const { data: rowV } = await supa.from('studio').select('data').eq('id',3).maybeSingle();
+        setBrevi((rowV && rowV.data && rowV.data.versioni) || {});
+      }catch(e){}
       canale = supa.channel('studio-contenuti')
         .on('postgres_changes', { event:'*', schema:'public', table:'studio', filter:'id=eq.2' },
             (p)=>{ if(p.new && p.new.data){ setLista(p.new.data.guiones||[]); setAggiornato(p.new.data.aggiornato||null); } })
+        .on('postgres_changes', { event:'*', schema:'public', table:'studio', filter:'id=eq.3' },
+            (p)=>{ if(p.new && p.new.data){ setBrevi(p.new.data.versioni||{}); } })
         .subscribe();
     })();
     return ()=>{ if(canale) supa.removeChannel(canale); };
@@ -1822,8 +1830,9 @@ function Contenuti({data, setData, user}) {
     else { nuove[id] = { scelto:true, da:user, quando:oggi() }; }
     setData({...data, config:{...(data.config||{}), contenutiScelte:nuove}});
   };
+  const testoDi = (g) => (brevi[g.id] && !mostraCompleta[g.id]) ? brevi[g.id] : (g.x||"");
   const copia = (g) => {
-    if(navigator.clipboard){ navigator.clipboard.writeText(g.x||""); setCopiato(g.id); setTimeout(()=>setCopiato(null), 1500); }
+    if(navigator.clipboard){ navigator.clipboard.writeText(testoDi(g)); setCopiato(g.id); setTimeout(()=>setCopiato(null), 1500); }
   };
 
   const FMT_C = { reel:{lab:"🎬 Reel", c:"#a78bfa"}, storia:{lab:"📱 Storia", c:"#34d399"}, carosello:{lab:"🖼 Carosello", c:"#fbbf24"} };
@@ -1872,9 +1881,15 @@ function Contenuti({data, setData, user}) {
               </div>
               {apertoQ && (
                 <div className="px-4 pb-4 md:px-5">
-                  <div className="rounded-xl bg-[#101018] border border-[#1c1c2a] p-4 text-[15px] leading-relaxed text-slate-200" style={{whiteSpace:"pre-wrap"}}>{g.x}</div>
-                  <div className="mt-2 flex items-center gap-2">
+                  <div className="rounded-xl bg-[#101018] border border-[#1c1c2a] p-4 text-[15px] leading-relaxed text-slate-200" style={{whiteSpace:"pre-wrap"}}>{testoDi(g)}</div>
+                  <div className="mt-2 flex items-center gap-2 flex-wrap">
                     <button onClick={()=>copia(g)} className="text-xs px-3 py-1.5 rounded-lg border border-[#26263a] text-slate-300 hover:text-white">{copiato===g.id?"✓ Copiato":"⧉ Copia testo (teleprompter)"}</button>
+                    {brevi[g.id] && (
+                      <button onClick={()=>setMostraCompleta({...mostraCompleta, [g.id]:!mostraCompleta[g.id]})} className="text-xs px-3 py-1.5 rounded-lg border border-[#26263a] text-slate-500 hover:text-slate-300">
+                        {mostraCompleta[g.id] ? "◂ Torna alla versione breve" : "Versione originale (lunga) ▸"}
+                      </button>
+                    )}
+                    {brevi[g.id] && !mostraCompleta[g.id] && <span className="text-[10px] text-emerald-400/80">✂ versione breve</span>}
                   </div>
                 </div>
               )}
