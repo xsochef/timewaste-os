@@ -73,7 +73,7 @@ const PERMESSI = {
   francesco: ["dashboard","cerca","clienti","radar","calendario","provvigioni"],
 };
 // Chi può vedere i totali aggregati di fatturato/cassa (Carlo registra gli incassi ma non vede il totale studio)
-const VEDE_TOTALI = { giuseppe:true, carlo:false, francesco:true };
+const VEDE_TOTALI = { giuseppe:true, carlo:false, francesco:false };
 
 // ---------- COSTANTI ----------
 const GENERI = ["Trap","Rap","Latin Urban","Pop Urban","Reggaeton","Drill","Altro"];
@@ -469,6 +469,12 @@ function App() {
 function Dashboard({data, setData, user, setView}) {
   const meseCorr = oggi().slice(0,7);
   const incassiMese = data.incassi.filter(i=>(i.data||"").slice(0,7)===meseCorr).reduce((s,i)=>s+(Number(i.pagato)||0),0);
+  // Fatturato "portato da me": incassi collegati alle mie provvigioni (via pagamento o appuntamento)
+  const mioSetInc = (()=>{ const ids=new Set(); (data.provvigioni||[]).filter(p=>p.richiestoDa===UTENTI[user].nome).forEach(p=>{ if(p.incassoId){ ids.add(p.incassoId); } else if(p.appuntamentoId){ data.incassi.filter(i=>i.appuntamentoId===p.appuntamentoId).forEach(i=>ids.add(i.id)); } }); return ids; })();
+  const mieiIncassi = data.incassi.filter(i=>mioSetInc.has(i.id));
+  const mioTot = mieiIncassi.reduce((s,i)=>s+(Number(i.pagato)||0),0);
+  const mioMese = mieiIncassi.filter(i=>(i.data||"").slice(0,7)===meseCorr).reduce((s,i)=>s+(Number(i.pagato)||0),0);
+  const mieProvvTot = (data.provvigioni||[]).filter(p=>p.richiestoDa===UTENTI[user].nome && ["approvata","liquidata"].includes(p.stato)).reduce((s,p)=>s+provImporto(p,data.incassi),0);
   // obiettivo mensile & forecast
   const target = Number((data.config||{}).targetMensile)||0;
   const setTarget = (v)=> setData && setData(d=>({...d, config:{...(d.config||{}), targetMensile:Number(v)||0}}));
@@ -546,6 +552,13 @@ function Dashboard({data, setData, user, setView}) {
             <div className="w-28 sm:w-44 shrink-0"><Sparkline valori={spark} color="#a78bfa" height={56} /></div>
           </div>
           {target>0 && <div className="mt-3 bg-black/30 rounded-full h-2 overflow-hidden"><div className="h-full rounded-full" style={{width:percTarget+"%", background:percTarget>=100?"#34d399":"#a78bfa"}}></div></div>}
+        </div>
+      ) : user==="francesco" ? (
+        <div className="mb-6 rounded-2xl border border-amber-500/20 p-5" style={{background:"linear-gradient(135deg,#241c0a 0%,#0e0e18 60%)"}}>
+          <div className="text-[11px] text-amber-300/80 font-semibold uppercase tracking-wide">Fatturato portato da te · questo mese</div>
+          <div className="text-3xl md:text-4xl font-black mt-1">{euro(mioMese)}</div>
+          <div className="text-xs text-slate-400 mt-1">Totale storico {euro(mioTot)} · tue provvigioni {euro(mieProvvTot)}</div>
+          <div className="text-[11px] text-slate-500 mt-1">Conta gli incassi collegati alle tue provvigioni.</div>
         </div>
       ) : (
         <div className="mb-6 rounded-2xl border border-emerald-500/20 p-5" style={{background:"linear-gradient(135deg,#0f2019 0%,#0e0e18 60%)"}}>
