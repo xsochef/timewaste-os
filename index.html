@@ -1123,6 +1123,7 @@ function AppForm({app, clienti, onSave, onDelete, user, provv, onProvvigione}) {
           <div className="text-sm font-medium mb-2">Provvigione {provv && <span style={{color:PROV_COLORI[provv.stato]}}>· {provv.perc}% ({provv.stato})</span>}</div>
           <div className="flex items-center gap-2">
             <select value={percP} onChange={e=>setPercP(e.target.value)} className={inputCls+" max-w-[110px]"}>
+              <option value="5">5%</option>
               <option value="10">10%</option>
               <option value="15">15%</option>
               <option value="20">20%</option>
@@ -1835,6 +1836,16 @@ function Impostazioni({data, setData}) {
 function Provvigioni({data, setData, user}) {
   const provv = data.provvigioni||[];
   const nome = id=>(data.clienti.find(c=>c.id===id)||{}).nome||"—";
+  const [nInc, setNInc] = useState("");
+  const [nPerc, setNPerc] = useState("5");
+  const incassiRecenti = [...data.incassi].filter(i=>i.clienteId).sort((a,b)=>(b.data||"").localeCompare(a.data||"")).slice(0,80);
+  const richiediSuIncasso = ()=>{
+    if(!nInc){ toast("Scegli prima un incasso"); return; }
+    const inc = data.incassi.find(i=>i.id===nInc); if(!inc) return;
+    setData(d=>({...d, provvigioni:[...(d.provvigioni||[]), {id:uid(), incassoId:inc.id, clienteId:inc.clienteId, dataSessione:inc.data, perc:Number(nPerc), stato:"richiesta", richiestoDa:UTENTI[user].nome, creata:oggi()}]}));
+    toast("Provvigione richiesta ✓");
+    setNInc("");
+  };
   const setStato = (id,stato)=>{ setData(d=>({...d, provvigioni:(d.provvigioni||[]).map(p=>p.id===id?{...p,stato}:p)})); toast("Provvigione "+stato+" ✓"); };
   const setBase = (id,val)=> setData(d=>({...d, provvigioni:(d.provvigioni||[]).map(p=>p.id===id?{...p, base:(val===""?null:Number(val))}:p)}));
   const setIncasso = (id,incassoId)=> setData(d=>({...d, provvigioni:(d.provvigioni||[]).map(p=>p.id===id?{...p, incassoId:(incassoId||undefined)}:p)}));
@@ -1881,6 +1892,26 @@ function Provvigioni({data, setData, user}) {
       <h1 className="text-2xl font-black mb-1">Provvigioni</h1>
       <p className="text-slate-400 text-sm mb-5">{isG ? "Approva le richieste di Francesco e conferma l'importo base (se pagamento e appuntamento non combaciano, scrivilo a mano). Le approvate vengono detratte dal lordo settimanale in Cassa." : "Le tue richieste di provvigione. Vengono approvate da Giuseppe."}</p>
 
+      <Card className="mb-6">
+        <div className="text-xs uppercase tracking-wide text-slate-500 font-semibold mb-2">Richiedi provvigione su un incasso</div>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="flex-1 min-w-[220px]">
+            <select value={nInc} onChange={e=>setNInc(e.target.value)} className={inputCls}>
+              <option value="">Scegli un incasso…</option>
+              {incassiRecenti.map(i=><option key={i.id} value={i.id}>{dataIt(i.data)} · {nome(i.clienteId)} · {euro(i.pagato)}{i.descrizione?" · "+i.descrizione:""}</option>)}
+            </select>
+          </div>
+          <select value={nPerc} onChange={e=>setNPerc(e.target.value)} className={inputCls+" max-w-[110px]"}>
+            <option value="5">5%</option>
+            <option value="10">10%</option>
+            <option value="15">15%</option>
+            <option value="20">20%</option>
+          </select>
+          <Btn onClick={richiediSuIncasso}>Richiedi</Btn>
+        </div>
+        <p className="text-[11px] text-slate-500 mt-2">Ti fai pagare in base agli incassi della settimana, anche senza un appuntamento a calendario. La richiesta va approvata da Giuseppe.</p>
+      </Card>
+
       {isG && byStato("richiesta").length>0 && (
         <div className="mb-6">
           <div className="text-xs uppercase tracking-wide text-amber-400 font-semibold mb-2">Da approvare ({byStato("richiesta").length})</div>
@@ -1920,7 +1951,7 @@ function Provvigioni({data, setData, user}) {
               {p.stato==="richiesta" && <button onClick={()=>elimina(p.id)} className="text-xs text-red-400/70 hover:text-red-400 shrink-0">Annulla</button>}
             </Riga>
           ))}
-          {visibili.length===0 && <Card className="text-center text-slate-500 py-10">Nessuna richiesta. Vai in Appuntamenti, apri una sessione e richiedi la provvigione.</Card>}
+          {visibili.length===0 && <Card className="text-center text-slate-500 py-10">Nessuna richiesta ancora. Usa il riquadro qui sopra per richiedere una provvigione su un incasso, oppure aprila da un appuntamento.</Card>}
         </div>
       )}
 
